@@ -70,7 +70,7 @@
       });
     }
 
-    // 顯示目前座標（給使用者參考）
+    // 顯示目前座標
     function updateUserLocationStatus(msg, isError = false) {
       const div = document.getElementById('user-location-status');
       div.textContent = msg;
@@ -90,7 +90,7 @@
       listDiv.innerHTML = '<div class="loading">📡 正在載入停車場資訊...</div>';
       statusDiv.innerHTML = '';
 
-      // 先取得定位（或重設）
+      // 先取得定位
       try {
         updateUserLocationStatus('🔎 取得您的位置中...');
         userLocation = await getUserLocation();
