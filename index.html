@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>台北市停車場資訊</title>
+  <!-- Leaflet 地圖樣式 -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+    #map { height: 500px; margin-bottom: 30px; border: 2px solid #ccc; border-radius: 8px; }
+    .parking { background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin: 15px 0; padding: 20px; transition: transform 0.2s; }
+    .parking:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
+    .parking-name { font-size: 1.2em; font-weight: bold; color: #2c3e50; margin-bottom: 10px; }
+    .refresh-btn { background-color: #3498db; color: white; border: none; padding: 12px 24px; border-radius: 5px; cursor: pointer; font-size: 16px; margin-bottom: 20px; }
+    .refresh-btn:hover { background-color: #2980b9; }
+    .label { font-weight: bold; color: #34495e; }
+    .loading, .status { text-align: center; margin: 15px; }
+    .error { background-color: #ffebee; color: #c62828; padding: 15px; border-radius: 5px; border-left: 4px solid #c62828; margin: 20px 0; }
+    .status.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+    .surplus-green { color: green; font-weight: bold; }
+    .surplus-red { color: red; font-weight: bold; }
+    .nav-btn { margin-top: 10px; padding: 8px 20px; border-radius: 5px; border: none; background: #3b82f6; color: #fff; font-size: 15px; cursor: pointer; }
+    .nav-btn:disabled { background: #aaa; }
+    #user-location-status { font-size: 0.98em; margin-bottom: 10px; color: #555; text-align: center; }
+  </style>
+</head>
+<body>
+
+  <h2>🚗 台北市停車場資訊</h2>
+  <div id="map"></div>
+
+  <div id="user-location-status"></div>
+
+  <div style="text-align: center; margin: 20px 0;">
+    <input type="text" id="searchInput" placeholder="🔍 搜尋停車場名稱"
+      style="padding: 10px; width: 80%; max-width: 400px; font-size: 16px;" />
+  </div>
+
+  <div style="text-align: center;">
+    <button class="refresh-btn" onclick="loadParking()" id="refreshBtn">
+      🔄 重新整理
+    </button>
+  </div>
+
+  <div id="status"></div>
+  <div id="list"><div class="loading">📡 正在載入停車場資訊...</div></div>
+
+  <!-- Leaflet 地圖 JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    let isLoading = false;
+    let userLocation = null; // {lat, lng}
+
+    // 取得使用者目前座標
+    function getUserLocation() {
+      return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+          reject('您的瀏覽器不支援定位功能');
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          },
+          (err) => {
+            reject('無法取得您的定位資訊（' + err.message + '）');
+          }
+        );
+      });
+    }
+
+    // 顯示目前座標（給使用者參考）
+    function updateUserLocationStatus(msg, isError = false) {
+      const div = document.getElementById('user-location-status');
+      div.textContent = msg;
+      div.style.color = isError ? '#c62828' : '#065c10';
+    }
+
+    async function loadParking() {
+      if (isLoading) return;
+
+      isLoading = true;
+      const refreshBtn = document.getElementById('refreshBtn');
+      const statusDiv = document.getElementById('status');
+      const listDiv = document.getElementById('list');
+
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = '⏳ 載入中...';
+      listDiv.innerHTML = '<div class="loading">📡 正在載入停車場資訊...</div>';
+      statusDiv.innerHTML = '';
+
+      // 先取得定位（或重設）
+      try {
+        updateUserLocationStatus('🔎 取得您的位置中...');
+        userLocation = await getUserLocation();
+        updateUserLocationStatus(`📍 您的位置：${userLocation.lat.toFixed(6)}, ${userLocation.lng.toFixed(6)}`);
+      } catch (err) {
+        userLocation = null;
+        updateUserLocationStatus('⚠️ ' + err, true);
+      }
+
+      try {
+        const res = await fetch('http://localhost:3000/api/parking');
+        if (!res.ok) throw new Error(`伺服器錯誤: ${res.status} ${res.statusText}`);
+        const data = await res.json();
+        listDiv.innerHTML = '';
+
+        let parkingArray = Array.isArray(data) ? data : (Object.values(data).find(v => Array.isArray(v)) || []);
+        if (parkingArray.length === 0) {
+          listDiv.innerHTML = '<div class="status">📭 目前沒有停車場資料</div>';
+          return;
+        }
+
+        statusDiv.innerHTML = `<div class="status success">✅ 成功載入 ${parkingArray.length} 個停車場</div>`;
+
+        // 地圖初始化
+        if (!window.mapInitialized) {
+          window.map = L.map('map').setView([25.033964, 121.564472], 13);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap 貢獻者'
+          }).addTo(window.map);
+          window.markersLayer = L.layerGroup().addTo(window.map);
+          window.mapInitialized = true;
+        } else {
+          window.markersLayer.clearLayers();
+        }
+
+        parkingArray.forEach((parking, index) => {
+          const div = document.createElement('div');
+          div.className = 'parking';
+          div.id = `parking-${index}`;
+
+          const name = parking.CarParkName?.Zh_tw || parking.Name || `停車場 #${index + 1}`;
+          const address = parking.Address || parking.Location || '地址未提供';
+          const description = parking.Description || parking.Note || '';
+          const lat = parking.CarParkPosition?.PositionLat || parking.Position?.Lat || parking.Latitude || '';
+          const lon = parking.CarParkPosition?.PositionLon || parking.Position?.Lon || parking.Longitude || '';
+          const totalSpace = parking.TotalSpace || parking.Capacity || '';
+          const surplusSpace = parking.SurplusSpace || parking.Available || '';
+          const availableSpaces = typeof parking.AvailableSpaces === 'number' ? parking.AvailableSpaces : null;
+
+          div.innerHTML = `
+            <div class="parking-name">${name}</div>
+            <div class="parking-info">
+                <div><span class="label">🏠 地址:</span> ${address}</div>
+                ${description ? `<div><span class="label">📝 描述:</span> ${description}</div>` : ''}
+                ${lat && lon ? `<div><span class="label">📍 座標:</span> ${lat}, ${lon}</div>` : ''}
+                ${totalSpace ? `<div><span class="label">🅿️ 總車位:</span> ${totalSpace}</div>` : ''}
+                ${availableSpaces !== null
+                  ? `<div><span class="label">🚘 剩餘車位:</span> 
+                        <span class="${availableSpaces === 0 ? 'surplus-red' : 'surplus-green'}">
+                            ${availableSpaces}
+                        </span>
+                    </div>`
+                  : ''}
+                <button class="nav-btn" ${!lat || !lon || !userLocation ? 'disabled title="請先允許定位或缺座標"' : ''}
+                  onclick="navigateToParking(${lat}, ${lon}, this)">
+                  🧭 導航到這裡
+                </button>
+            </div>
+          `;
+
+          listDiv.appendChild(div);
+
+          if (lat && lon) {
+            const marker = L.marker([parseFloat(lat), parseFloat(lon)]);
+            marker.bindPopup(`<strong>${name}</strong><br/>${address}`);
+            marker.on('click', () => {
+              const target = document.getElementById(`parking-${index}`);
+              if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                target.style.backgroundColor = '#fff8e1';
+                setTimeout(() => {
+                  target.style.backgroundColor = 'white';
+                }, 1500);
+              }
+            });
+            window.markersLayer.addLayer(marker);
+          }
+        });
+
+      } catch (err) {
+        console.error('❌ 載入錯誤:', err);
+        listDiv.innerHTML = `
+          <div class="error">
+            <strong>🚫 載入失敗</strong><br/>
+            錯誤訊息: ${err.message}<br/>
+            <small>請檢查後端服務是否正常運行</small>
+          </div>
+        `;
+      } finally {
+        isLoading = false;
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = '🔄 重新整理';
+      }
+    }
+
+    // 產生導航連結並打開
+    async function navigateToParking(destLat, destLng, btn) {
+      if (!userLocation) {
+        alert('請先允許定位權限，才能使用導航功能！');
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = '⏳ 產生導航中...';
+
+      try {
+        const navRes = await fetch(
+          `http://localhost:3000/api/navigation?originLat=${userLocation.lat}&originLng=${userLocation.lng}&destLat=${destLat}&destLng=${destLng}`
+        );
+        const navData = await navRes.json();
+        if (navData.success && navData.navigationUrl) {
+          window.open(navData.navigationUrl, '_blank');
+        } else {
+          alert('導航網址產生失敗');
+        }
+      } catch (e) {
+        alert('產生導航失敗：' + e.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🧭 導航到這裡';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadParking();
+
+      const searchInput = document.getElementById('searchInput');
+      if (searchInput) {
+        searchInput.addEventListener('input', () => {
+          const query = searchInput.value.toLowerCase();
+          const cards = document.querySelectorAll('.parking');
+          cards.forEach(card => {
+            const name = card.querySelector('.parking-name')?.textContent.toLowerCase() || '';
+            card.style.display = name.includes(query) ? '' : 'none';
+          });
+        });
+      }
+    });
+  </script>
+</body>
+</html>
