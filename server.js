@@ -4,16 +4,16 @@ const cors = require('cors');
 let fetch;
 try {
   fetch = require('node-fetch');
-  console.log('✅ node-fetch 模組載入成功');
+  console.log('node-fetch 模組載入成功');
 } catch (err) {
-  console.error('❌ node-fetch 模組載入失敗:', err.message);
+  console.error('node-fetch 模組載入失敗:', err.message);
 }
 
 const app = express();
 app.use(cors());
 
 app.get('/api/test', (req, res) => {
-  console.log('✅ 測試端點被調用');
+  console.log('測試端點被調用');
   res.json({ 
     status: 'OK', 
     message: '後端服務正常運行',
@@ -50,7 +50,7 @@ app.get('/api/test-auth', async (req, res) => {
     
     if (!authResponse.ok) {
       const errorText = await authResponse.text();
-      console.error('❌ 認證失敗:', errorText);
+      console.error('認證失敗:', errorText);
       return res.status(authResponse.status).json({ 
         error: '認證失敗', 
         status: authResponse.status,
@@ -59,7 +59,7 @@ app.get('/api/test-auth', async (req, res) => {
     }
     
     const authData = await authResponse.json();
-    console.log('✅ 認證成功！Token 類型:', typeof authData.access_token);
+    console.log('認證成功！Token 類型:', typeof authData.access_token);
     
     res.json({ 
       success: true, 
@@ -69,7 +69,7 @@ app.get('/api/test-auth', async (req, res) => {
     });
     
   } catch (err) {
-    console.error('❌ 認證測試錯誤:', err);
+    console.error('認證測試錯誤:', err);
     res.status(500).json({ 
       error: '認證測試失敗', 
       message: err.message 
@@ -103,7 +103,7 @@ app.get('/api/parking', async (req, res) => {
     
     if (!authResponse.ok) {
       const errorText = await authResponse.text();
-      console.error('❌ 認證失敗:', errorText);
+      console.error('認證失敗:', errorText);
       return res.status(authResponse.status).json({ 
         error: '認證失敗', 
         details: errorText 
@@ -111,10 +111,10 @@ app.get('/api/parking', async (req, res) => {
     }
     
     const authData = await authResponse.json();
-    console.log('✅ Access Token 取得成功');
+    console.log('Access Token 取得成功');
     
     const apiUrl = "https://tdx.transportdata.tw/api/basic/v1/Parking/OffStreet/CarPark/City/Taipei?%24top=30&%24format=JSON";
-    console.log('📡 正在取得停車場資料...');
+    console.log('正在取得停車場資料...');
     
     const dataResponse = await fetch(apiUrl, {
       headers: {
@@ -127,7 +127,7 @@ app.get('/api/parking', async (req, res) => {
     
     if (!dataResponse.ok) {
       const errorText = await dataResponse.text();
-      console.error('❌ API 調用失敗:', errorText);
+      console.error('API 調用失敗:', errorText);
       return res.status(dataResponse.status).json({ 
         error: 'TDX API 調用失敗', 
         status: dataResponse.status,
@@ -146,22 +146,22 @@ app.get('/api/parking', async (req, res) => {
     
     if (Array.isArray(apiData)) {
       parkingData = apiData;
-      console.log(`✅ 直接取得陣列格式，共 ${parkingData.length} 筆資料`);
+      console.log(`直接取得陣列格式，共 ${parkingData.length} 筆資料`);
     } else if (apiData && typeof apiData === 'object') {
       if (Array.isArray(apiData.data)) {
         parkingData = apiData.data;
-        console.log(`✅ 從 data 屬性取得陣列，共 ${parkingData.length} 筆資料`);
+        console.log(`從 data 屬性取得陣列，共 ${parkingData.length} 筆資料`);
       } else if (Array.isArray(apiData.result)) {
         parkingData = apiData.result;
-        console.log(`✅ 從 result 屬性取得陣列，共 ${parkingData.length} 筆資料`);
+        console.log(`從 result 屬性取得陣列，共 ${parkingData.length} 筆資料`);
       } else if (Array.isArray(apiData.records)) {
         parkingData = apiData.records;
-        console.log(`✅ 從 records 屬性取得陣列，共 ${parkingData.length} 筆資料`);
+        console.log(`從 records 屬性取得陣列，共 ${parkingData.length} 筆資料`);
       } else {
         return res.json(apiData);
       }
     } else {
-      console.error('❌ 意外的資料類型:', typeof apiData);
+      console.error('意外的資料類型:', typeof apiData);
       return res.status(500).json({ 
         error: '資料格式異常', 
         dataType: typeof apiData,
@@ -173,7 +173,7 @@ app.get('/api/parking', async (req, res) => {
     res.json(parkingData);
     
   } catch (err) {
-    console.error('❌ 停車場 API 錯誤:', {
+    console.error('停車場 API 錯誤:', {
       message: err.message,
       stack: err.stack
     });
@@ -207,7 +207,7 @@ app.get('/api/navigation', (req, res) => {
 const PORT = 3000;
 app.listen(PORT, () => {
   console.log('='.repeat(50));
-  console.log('✅ 後端服務啟動成功！');
+  console.log('後端服務啟動成功！');
   console.log('服務地址: http://localhost:${PORT}');
   console.log(`基本測試: http://localhost:${PORT}/api/test`);
   console.log(`認證測試: http://localhost:${PORT}/api/test-auth`);
@@ -216,9 +216,9 @@ app.listen(PORT, () => {
 });
 
 process.on('uncaughtException', (err) => {
-  console.error('❌ 未捕獲的異常:', err);
+  console.error('未捕獲的異常:', err);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ 未處理的 Promise 拒絕:', reason);
+  console.error('未處理的 Promise 拒絕:', reason);
 });
